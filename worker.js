@@ -1,5 +1,6 @@
 const config = {
-  no_ref: "off", //Control the HTTP referrer header, if you want to create an anonymous link that will hide the HTTP Referer header, please set to "on" .
+  // no_ref: "off", //Control the HTTP referrer header, if you want to create an anonymous link that will hide the HTTP Referer header, please set to "on" .
+  result_page: false, // After get the value from KV, if use a page to show the result.
   theme: "",//Homepage theme, use the empty value for default theme. To use urlcool theme, please fill with "theme/urlcool" .
   cors: "on",//Allow Cross-origin resource sharing for API requests.
   unique_link: false,//If it is true, the same long url will be shorten into the same short url
@@ -17,7 +18,7 @@ const protect_keylist = [
 ]
 
 let index_html = "https://crazypeace.github.io/Url-Shorten-Worker/" + config.theme + "/index.html"
-let no_ref_html = "https://crazypeace.github.io/Url-Shorten-Worker/no-ref.html"
+let result_html = "https://crazypeace.github.io/Url-Shorten-Worker/" + config.theme + "/result.html"
 
 const html404 = `<!DOCTYPE html>
   <html>
@@ -295,9 +296,7 @@ async function handleRequest(request) {
   if (!path) {
     return Response.redirect("https://zelikk.blogspot.com/search/label/Url-Shorten-Worker", 302)
     /* new Response(html404, {
-      headers: {
-        "content-type": "text/html;charset=UTF-8",
-      },
+      headers: response_header,
       status: 404
     }) */
   }
@@ -310,9 +309,7 @@ async function handleRequest(request) {
     // 操作页面文字修改
     // index = index.replace(/短链系统变身/gm, "")
     return new Response(index, {
-      headers: {
-        "content-type": "text/html;charset=UTF-8",
-      },
+      headers: response_header,
     })
   }
 
@@ -346,47 +343,42 @@ async function handleRequest(request) {
       await LINKS.delete(path)
     }
 
-    // 作为一个短链系统, value就是long URL, 需要跳转
-    if (config.system_type == "shorturl") {
-      // 带上参数部分, 拼装要跳转的最终网址
-      // URL to jump finally
-      let location;
-      if (params) {
-        location = value + params
-      } else {
-        location = value
-      }
+    // 带上参数部分, 拼装要跳转的最终网址
+    // URL to jump finally
+    if (params) {
+      value = value + params
+    }
 
-      if (config.no_ref == "on") {
-        let no_ref = await fetch(no_ref_html)
-        no_ref = await no_ref.text()
-        no_ref = no_ref.replace(/{__FINAL_LINK__}/gm, location)
-        return new Response(no_ref, {
-          headers: {
-            "content-type": "text/html;charset=UTF-8",
-          },
-        })
-      } else {
-        return Response.redirect(location, 302)
-      }
+    // 如果自定义了结果页面
+    if (config.result_page) {
+      let result_page_html = await fetch(result_html)
+      let result_page_html_text = await result_page_html.text()      
+      result_page_html_text = result_page_html_text.replace(/{__FINAL_LINK__}/gm, value)
+      return new Response(result_page_html_text, {
+        headers: response_header,
+      })
+    } 
+
+    // 以下是不使用自定义结果页面的处理
+    // 作为一个短链系统, 需要跳转
+    if (config.system_type == "shorturl") {
+      return Response.redirect(value, 302)
     } else if (config.system_type == "imghost") {
       // 如果是图床      
       var blob = base64ToBlob(value)
       return new Response(blob, {
-        headers: {'Content-Type': 'text/plain;charset=UTF-8'},
+        // 图片不能指定content-type为 text/plain
       })
     } else {
       // 如果只是一个单纯的key-value系统, 简单的显示value就行了
       return new Response(value, {
-        headers: {'Content-Type': 'text/plain;charset=UTF-8'},
+        headers: response_header,
       })
     }
-  } else { // 其它 config.system_type 类型
+  } else { 
     // If request not in KV, return 404
     return new Response(html404, {
-      headers: {
-        "content-type": "text/html;charset=UTF-8",
-      },
+      headers: response_header,
       status: 404
     })
   }
